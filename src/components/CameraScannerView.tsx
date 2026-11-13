@@ -17,7 +17,6 @@ import type {
   ExamModel,
   ScannedResult,
 } from "../types/omr";
-import { DEFAULT_COMMITTEES } from "../data/presetExams";
 import {
   CornerQuad,
   decodeQRFromCanvas,
@@ -61,7 +60,7 @@ export const CameraScannerView: React.FC<CameraScannerViewProps> = ({
   >(null);
 
   const [studentNameInput, setStudentNameInput] = useState("");
-  const [committeeInput, setCommitteeInput] = useState(DEFAULT_COMMITTEES[0]);
+  const [committeeInput, setCommitteeInput] = useState("");
   const [scannedResult, setScannedResult] = useState<ScannedResult | null>(null);
   const [savedNotice, setSavedNotice] = useState(false);
   const [aiVerifying, setAiVerifying] = useState(false);
@@ -289,16 +288,8 @@ export const CameraScannerView: React.FC<CameraScannerViewProps> = ({
 
   const handleSimulateScan = async () => {
     if (!activeExam) return;
-    const simNames = [
-      "محمد عبد الله الصبري",
-      "أمة الرحمن علي السقاف",
-      "حسين صالح الهمداني",
-      "رهف يحيى المتوكل",
-    ];
-    const pickedName =
-      studentNameInput.trim() ||
-      simNames[Math.floor(Math.random() * simNames.length)];
-    const pickedCommittee = committeeInput.trim() || DEFAULT_COMMITTEES[0];
+    const pickedName = studentNameInput.trim() || "ورقة اختبار محاكاة";
+    const pickedCommittee = committeeInput.trim() || "لجنة اختبار";
 
     const simCanvas = await generateSimulatedOMRPhoto(
       activeExam,

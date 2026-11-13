@@ -1,137 +1,165 @@
-import { useEffect, useState } from "react";
-import { DEFAULT_COMMITTEES, PRESET_EXAMS } from "./data/presetExams";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Lock, ShieldCheck, Loader2 } from "lucide-react";
+import { PRESET_EXAMS } from "./data/presetExams";
 import type {
   CalibrationSettings,
   ExamModel,
   ScannedResult,
   StudentAssignment,
 } from "./types/omr";
+import {
+  ActiveVaultSession,
+  DEFAULT_CALIBRATION,
+  saveVaultWithSession,
+  VaultPayload,
+} from "./utils/secureVault";
 import { SheetGeneratorView } from "./components/SheetGeneratorView";
 import { CameraScannerView } from "./components/CameraScannerView";
 import { ExamsDashboardView } from "./components/ExamsDashboardView";
 import { ResultsDashboardView } from "./components/ResultsDashboardView";
+import { PasscodeLockScreen } from "./components/PasscodeLockScreen";
+import { SecuritySettingsModal } from "./components/SecuritySettingsModal";
+import { PWAInstallButton } from "./components/PWAInstallButton";
+import { OfflineIndicator } from "./components/OfflineIndicator";
 
 type ActiveTab = "generator" | "scanner" | "exams" | "results";
 
-const STORAGE_EXAMS_KEY = "ishraq_omr_exams_v1";
-const STORAGE_RESULTS_KEY = "ishraq_omr_results_v1";
-const STORAGE_CALIBRATION_KEY = "ishraq_omr_calibration_v1";
-const STORAGE_COMMITTEES_KEY = "ishraq_omr_committees_v1";
-const STORAGE_ROSTER_KEY = "ishraq_omr_roster_v1";
-
-const DEFAULT_ROSTER: StudentAssignment[] = [
-  {
-    id: "stu_seed_1",
-    studentName: "محمد عبد الله الصبري",
-    committeeName: DEFAULT_COMMITTEES[0],
-    examId: PRESET_EXAMS[0].id,
-  },
-  {
-    id: "stu_seed_2",
-    studentName: "أحمد يحيى الشامي",
-    committeeName: DEFAULT_COMMITTEES[0],
-    examId: PRESET_EXAMS[1].id,
-  },
-  {
-    id: "stu_seed_3",
-    studentName: "عمر علي الحداد",
-    committeeName: DEFAULT_COMMITTEES[1],
-    examId: PRESET_EXAMS[0].id,
-  },
-  {
-    id: "stu_seed_4",
-    studentName: "سالم ناصر المقطري",
-    committeeName: DEFAULT_COMMITTEES[1],
-    examId: PRESET_EXAMS[1].id,
-  },
-];
-
-const DEFAULT_CALIBRATION: CalibrationSettings = {
-  fillThreshold: 0.24,
-  multiMarkMargin: 0.1,
-  contrastBoost: 1.15,
-};
-
-function loadJson<T>(key: string, fallback: T): T {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
-}
+const INACTIVITY_LOCK_MS = 15 * 60 * 1000; // 15 minutes
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>("generator");
 
-  const [exams, setExams] = useState<ExamModel[]>(() => {
-    const loaded = loadJson<ExamModel[]>(STORAGE_EXAMS_KEY, PRESET_EXAMS);
-    const presetMap = new Map(PRESET_EXAMS.map((p) => [p.id, p]));
-    return loaded.map((ex) => ({
-      ...ex,
-      examGroup:
-        ex.examGroup ||
-        presetMap.get(ex.id)?.examGroup ||
-        ex.title ||
-        `اختبار ${ex.subject}`,
-    }));
-  });
+  // Auth & Vault Lock State (App never renders sensitive data while locked)
+  const [authChecking, setAuthChecking] = useState(true);
+  const [serverProtected, setServerProtected] = useState(false);
+  const [serverAuthenticated, setServerAuthenticated] = useState(false);
+  const [vaultSession, setVaultSession] = useState<ActiveVaultSession | null>(
+    null
+  );
+  const [securityModalOpen, setSecurityModalOpen] = useState(false);
+
+  // Decrypted sensitive state (only populated in memory while unlocked)
+  const [exams, setExams] = useState<ExamModel[]>(PRESET_EXAMS);
   const [selectedExamId, setSelectedExamId] = useState<string>(
-    () => exams[0]?.id ?? PRESET_EXAMS[0].id
+    PRESET_EXAMS[0].id
   );
-  const [committees, setCommittees] = useState<string[]>(() =>
-    loadJson<string[]>(STORAGE_COMMITTEES_KEY, DEFAULT_COMMITTEES)
-  );
-  const [roster, setRoster] = useState<StudentAssignment[]>(() =>
-    loadJson<StudentAssignment[]>(STORAGE_ROSTER_KEY, DEFAULT_ROSTER)
-  );
-  const [results, setResults] = useState<ScannedResult[]>(() =>
-    loadJson<ScannedResult[]>(STORAGE_RESULTS_KEY, [])
-  );
-  const [calibration, setCalibration] = useState<CalibrationSettings>(() =>
-    loadJson<CalibrationSettings>(STORAGE_CALIBRATION_KEY, DEFAULT_CALIBRATION)
-  );
+  const [committees, setCommittees] = useState<string[]>([]);
+  const [roster, setRoster] = useState<StudentAssignment[]>([]);
+  const [results, setResults] = useState<ScannedResult[]>([]);
+  const [calibration, setCalibration] =
+    useState<CalibrationSettings>(DEFAULT_CALIBRATION);
+
+  const isUnlocked = Boolean(vaultSession);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_EXAMS_KEY, JSON.stringify(exams));
-    } catch {
-      // Ignore storage quota errors
-    }
-  }, [exams]);
+    let active = true;
+    fetch("/api/auth/status", { cache: "no-store" })
+      .then((res) => (res.ok ? res.json() : null))
+      .then(
+        (
+          data: { serverProtected?: boolean; authenticated?: boolean } | null
+        ) => {
+          if (!active) return;
+          if (data) {
+            setServerProtected(Boolean(data.serverProtected));
+            setServerAuthenticated(Boolean(data.authenticated));
+          }
+        }
+      )
+      .catch(() => {
+        // Offline PWA fallback: local AES-256-GCM vault still protects access
+      })
+      .finally(() => {
+        if (active) setAuthChecking(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_RESULTS_KEY, JSON.stringify(results));
-    } catch {
-      // Ignore storage quota errors if many annotated images exist
-    }
-  }, [results]);
+  const handleUnlocked = useCallback(
+    (session: ActiveVaultSession, payload: VaultPayload) => {
+      const normalizedExams =
+        payload.exams && payload.exams.length > 0 ? payload.exams : PRESET_EXAMS;
+      setExams(normalizedExams);
+      setSelectedExamId(normalizedExams[0]?.id ?? PRESET_EXAMS[0].id);
+      setCommittees(Array.isArray(payload.committees) ? payload.committees : []);
+      setRoster(Array.isArray(payload.roster) ? payload.roster : []);
+      setResults(Array.isArray(payload.results) ? payload.results : []);
+      setCalibration(payload.calibration ?? DEFAULT_CALIBRATION);
+      setVaultSession(session);
+      setServerAuthenticated(true);
+    },
+    []
+  );
 
-  useEffect(() => {
+  const handleLockNow = useCallback(async () => {
+    setSecurityModalOpen(false);
+    setVaultSession(null);
+    setServerAuthenticated(false);
+    // Wipe sensitive lists from React state immediately
+    setRoster([]);
+    setCommittees([]);
+    setResults([]);
+    setExams(PRESET_EXAMS);
     try {
-      localStorage.setItem(STORAGE_CALIBRATION_KEY, JSON.stringify(calibration));
+      await fetch("/api/auth/logout", { method: "POST" });
     } catch {
-      // Ignore
+      // Ignore network errors if offline
     }
-  }, [calibration]);
+  }, []);
 
+  // Persist encrypted vault whenever sensitive state updates while unlocked
+  const persistTimerRef = useRef<number | null>(null);
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_COMMITTEES_KEY, JSON.stringify(committees));
-    } catch {
-      // Ignore
+    if (!vaultSession) return;
+    if (persistTimerRef.current) {
+      window.clearTimeout(persistTimerRef.current);
     }
-  }, [committees]);
+    persistTimerRef.current = window.setTimeout(() => {
+      saveVaultWithSession(vaultSession, {
+        exams,
+        committees,
+        roster,
+        results,
+        calibration,
+      }).catch(() => {
+        // Ignore storage quota errors
+      });
+    }, 150);
 
+    return () => {
+      if (persistTimerRef.current) {
+        window.clearTimeout(persistTimerRef.current);
+      }
+    };
+  }, [vaultSession, exams, committees, roster, results, calibration]);
+
+  // Auto-lock after inactivity
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_ROSTER_KEY, JSON.stringify(roster));
-    } catch {
-      // Ignore
+    if (!isUnlocked) return;
+    let timer = window.setTimeout(() => {
+      handleLockNow();
+    }, INACTIVITY_LOCK_MS);
+
+    const resetTimer = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        handleLockNow();
+      }, INACTIVITY_LOCK_MS);
+    };
+
+    const events = ["mousedown", "keydown", "touchstart", "scroll"];
+    for (const ev of events) {
+      window.addEventListener(ev, resetTimer, { passive: true });
     }
-  }, [roster]);
+    return () => {
+      window.clearTimeout(timer);
+      for (const ev of events) {
+        window.removeEventListener(ev, resetTimer);
+      }
+    };
+  }, [isUnlocked, handleLockNow]);
 
   const handleAddExam = (exam: ExamModel) => {
     setExams((prev) => [exam, ...prev]);
@@ -179,6 +207,30 @@ export default function App() {
     );
   };
 
+  if (authChecking) {
+    return (
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center">
+        <div className="flex items-center gap-2.5 text-sm font-semibold text-slate-700">
+          <Loader2 className="w-5 h-5 animate-spin text-emerald-800" />
+          <span>جارٍ التحقق من أمان الجلسة...</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isUnlocked) {
+    return (
+      <>
+        <PasscodeLockScreen
+          serverProtected={serverProtected}
+          serverAuthenticated={serverAuthenticated}
+          onUnlocked={handleUnlocked}
+        />
+        <OfflineIndicator />
+      </>
+    );
+  }
+
   const navItems: { id: ActiveTab; label: string }[] = [
     { id: "generator", label: "ورقة التظليل" },
     { id: "scanner", label: "الماسح الضوئي" },
@@ -190,7 +242,7 @@ export default function App() {
     <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 print:block print:min-h-0 print:bg-white">
       {/* 3-Zone Top Bar Contract */}
       <header className="no-print bg-white border-b border-slate-200 sticky top-0 z-30">
-        <div className="max-w-[1360px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-8">
+        <div className="max-w-[1360px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4 sm:gap-8">
           {/* Zone 1: Brand wordmark */}
           <button
             type="button"
@@ -224,12 +276,31 @@ export default function App() {
             })}
           </nav>
 
-          {/* Zone 3: 1 Primary Action */}
-          <div className="flex items-center shrink-0">
+          {/* Zone 3: Install, Lock & Primary Action */}
+          <div className="flex items-center gap-2 shrink-0">
+            <PWAInstallButton compact />
+            <button
+              type="button"
+              onClick={() => setSecurityModalOpen(true)}
+              title="إعدادات الرمز السري والأمان"
+              className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-700" />
+              <span className="hidden sm:inline">الأمان</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleLockNow}
+              title="قفل التطبيق فوراً"
+              className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors whitespace-nowrap shrink-0"
+            >
+              <Lock className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">قفل</span>
+            </button>
             <button
               type="button"
               onClick={() => setActiveTab("scanner")}
-              className="rounded-md bg-emerald-800 px-4 py-2 text-xs sm:text-sm font-semibold text-white hover:bg-emerald-900 transition-colors whitespace-nowrap shrink-0"
+              className="rounded-md bg-emerald-800 px-3.5 py-2 text-xs sm:text-sm font-semibold text-white hover:bg-emerald-900 transition-colors whitespace-nowrap shrink-0"
             >
               مسح ورقة الآن
             </button>
@@ -324,10 +395,27 @@ export default function App() {
 
       <footer className="no-print border-t border-slate-200 bg-white py-4 mt-8">
         <div className="max-w-[1360px] mx-auto px-4 sm:px-6 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-          <span>مدارس إشراق اليمن · نظام الأتمتة والتصحيح الإلكتروني</span>
+          <span>مدارس إشراق اليمن · نظام الأتمتة والتصحيح الإلكتروني الخاص</span>
           <span>إشراف الأستاذ إبراهيم</span>
         </div>
       </footer>
+
+      <SecuritySettingsModal
+        isOpen={securityModalOpen}
+        onClose={() => setSecurityModalOpen(false)}
+        serverProtected={serverProtected}
+        currentPayload={{
+          exams,
+          committees,
+          roster,
+          results,
+          calibration,
+        }}
+        onVaultRotated={(nextSession) => setVaultSession(nextSession)}
+        onLockNow={handleLockNow}
+      />
+
+      <OfflineIndicator />
     </div>
   );
 }

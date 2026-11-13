@@ -47,15 +47,15 @@ export const SheetGeneratorView: React.FC<SheetGeneratorViewProps> = ({
   const [mode, setMode] = useState<"batch" | "single">("batch");
 
   // Single sheet mode state
-  const [singleStudentName, setSingleStudentName] = useState("محمد عبد الله الصبري");
+  const [singleStudentName, setSingleStudentName] = useState("");
   const [singleCommitteeName, setSingleCommitteeName] = useState(
-    committees[0] || "لجنة (أ) - قاعة الخنساء"
+    committees[0] || ""
   );
 
   // Paste area & committee management state
   const [pasteText, setPasteText] = useState("");
   const [defaultPasteCommittee, setDefaultPasteCommittee] = useState(
-    committees[0] || "لجنة (أ) - قاعة الخنساء"
+    committees[0] || ""
   );
   const [newCommitteeInput, setNewCommitteeInput] = useState("");
 
@@ -191,7 +191,7 @@ export const SheetGeneratorView: React.FC<SheetGeneratorViewProps> = ({
     const parsed: StudentAssignment[] = lines.map((line, i) => {
       const parts = line.split(/\t|،|,|\|/).map((p) => p.trim()).filter(Boolean);
       const studentName = parts[0] || line;
-      let assignedCommittee = defaultPasteCommittee || committees[0] || "لجنة (أ)";
+      let assignedCommittee = defaultPasteCommittee || committees[0] || "";
       if (parts[1]) {
         assignedCommittee = parts[1];
         if (!newCommittees.includes(assignedCommittee)) {
@@ -230,13 +230,13 @@ export const SheetGeneratorView: React.FC<SheetGeneratorViewProps> = ({
   };
 
   const handleRemoveCommittee = (name: string) => {
-    if (committees.length <= 1) return;
     const remaining = committees.filter((c) => c !== name);
     onChangeCommittees(remaining);
-    // Reassign any student in the removed committee to the first remaining committee
     onChangeRoster(
       roster.map((s) =>
-        s.committeeName === name ? { ...s, committeeName: remaining[0] } : s
+        s.committeeName === name
+          ? { ...s, committeeName: remaining[0] || "" }
+          : s
       )
     );
   };
@@ -344,8 +344,8 @@ export const SheetGeneratorView: React.FC<SheetGeneratorViewProps> = ({
       roster.find((s) => s.id === previewStudentId) ?? roster[0] ?? null;
     if (!stu) {
       return {
-        studentName: "طالب تجريبي",
-        committeeName: committees[0] || "لجنة (أ)",
+        studentName: "",
+        committeeName: committees[0] || "",
         exam: activeExam,
       };
     }
@@ -597,9 +597,7 @@ export const SheetGeneratorView: React.FC<SheetGeneratorViewProps> = ({
                     rows={4}
                     value={pasteText}
                     onChange={(e) => setPasteText(e.target.value)}
-                    placeholder={
-                      "الصق قائمة أسماء الطلاب هنا دفعة واحدة (من Excel أو WhatsApp أو ملف نصي)...\nمثال:\nمحمد عبد الله الصبري\nأحمد يحيى الشامي"
-                    }
+                    placeholder="الصق قائمة أسماء الطلاب هنا دفعة واحدة (اسم في كل سطر، أو: الاسم [Tab] اللجنة)..."
                     className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-700 focus:outline-none leading-relaxed"
                   />
                   <div className="flex flex-wrap items-center gap-2">
@@ -608,6 +606,7 @@ export const SheetGeneratorView: React.FC<SheetGeneratorViewProps> = ({
                       onChange={(e) => setDefaultPasteCommittee(e.target.value)}
                       className="flex-1 min-w-[140px] rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs text-slate-800"
                     >
+                      <option value="">بدون لجنة افتراضية (تحديد لاحقاً)</option>
                       {committees.map((c) => (
                         <option key={c} value={c}>
                           الافتراضي: {c}
@@ -665,19 +664,23 @@ export const SheetGeneratorView: React.FC<SheetGeneratorViewProps> = ({
                   </div>
 
                   <div className="max-h-36 overflow-y-auto divide-y divide-slate-100 border border-slate-100 rounded-md">
-                    {committees.map((c) => (
-                      <div
-                        key={c}
-                        className="flex items-center justify-between gap-2 px-2.5 py-1.5 text-xs"
-                      >
-                        <span className="truncate font-medium text-slate-800">
-                          {c}
-                        </span>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="font-mono-num text-slate-500">
-                            {committeeCounts.get(c) ?? 0}
+                    {committees.length === 0 ? (
+                      <div className="px-3 py-4 text-center text-xs text-slate-400">
+                        أضف أسماء اللجان أعلاه (مثال: لجنة 1) لتحديدها للطلاب.
+                      </div>
+                    ) : (
+                      committees.map((c) => (
+                        <div
+                          key={c}
+                          className="flex items-center justify-between gap-2 px-2.5 py-1.5 text-xs"
+                        >
+                          <span className="truncate font-medium text-slate-800">
+                            {c}
                           </span>
-                          {committees.length > 1 && (
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="font-mono-num text-slate-500">
+                              {committeeCounts.get(c) ?? 0}
+                            </span>
                             <button
                               type="button"
                               onClick={() => handleRemoveCommittee(c)}
@@ -686,10 +689,10 @@ export const SheetGeneratorView: React.FC<SheetGeneratorViewProps> = ({
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
-                          )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </div>
               </div>
@@ -717,14 +720,29 @@ export const SheetGeneratorView: React.FC<SheetGeneratorViewProps> = ({
                         توزيع النماذج بالتناوب داخل كل لجنة
                       </button>
                     )}
-                    <button
-                      type="button"
-                      onClick={handleDistributeCommitteesRandomly}
-                      className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 whitespace-nowrap"
-                    >
-                      <Shuffle className="w-3.5 h-3.5" />
-                      توزيع عشوائي على اللجان
-                    </button>
+                    {committees.length > 0 && roster.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleDistributeCommitteesRandomly}
+                        className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 whitespace-nowrap"
+                      >
+                        <Shuffle className="w-3.5 h-3.5" />
+                        توزيع عشوائي على اللجان
+                      </button>
+                    )}
+                    {roster.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onChangeRoster([]);
+                          setPreviewStudentId(null);
+                        }}
+                        className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 whitespace-nowrap"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        مسح القائمة
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -788,11 +806,13 @@ export const SheetGeneratorView: React.FC<SheetGeneratorViewProps> = ({
                                   }
                                   className="w-full rounded border border-slate-300 bg-white px-2 py-1 text-xs text-slate-800 focus:border-emerald-700 focus:outline-none"
                                 >
-                                  {!committees.includes(stu.committeeName) && (
-                                    <option value={stu.committeeName}>
-                                      {stu.committeeName}
-                                    </option>
-                                  )}
+                                  <option value="">— اختر اللجنة —</option>
+                                  {stu.committeeName &&
+                                    !committees.includes(stu.committeeName) && (
+                                      <option value={stu.committeeName}>
+                                        {stu.committeeName}
+                                      </option>
+                                    )}
                                   {committees.map((c) => (
                                     <option key={c} value={c}>
                                       {c}
@@ -916,17 +936,19 @@ export const SheetGeneratorView: React.FC<SheetGeneratorViewProps> = ({
                 <label className="block text-sm font-semibold text-slate-800">
                   اسم اللجنة
                 </label>
-                <select
+                <input
+                  type="text"
+                  list="single-committee-options"
                   value={singleCommitteeName}
                   onChange={(e) => setSingleCommitteeName(e.target.value)}
+                  placeholder="اكتب اسم اللجنة أو اختر من القائمة..."
                   className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-emerald-700 focus:outline-none"
-                >
+                />
+                <datalist id="single-committee-options">
                   {committees.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
+                    <option key={c} value={c} />
                   ))}
-                </select>
+                </datalist>
               </div>
 
               <div className="space-y-1.5">

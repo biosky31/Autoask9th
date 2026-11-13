@@ -69,15 +69,15 @@ export const ResultsDashboardView: React.FC<ResultsDashboardViewProps> = ({
           10
       ) / 10;
     const best = filtered.reduce((a, b) =>
-      a.autoScore >= b.autoScore ? a : b
+      a.totalScore >= b.totalScore ? a : b
     );
     const passed = filtered.filter((r) => r.percentage >= 50).length;
     const passRate = Math.round((passed / filtered.length) * 1000) / 10;
     return {
       count: filtered.length,
       avgPct,
-      maxScore: best.autoScore,
-      maxPossible: best.autoMaxScore,
+      maxScore: best.totalScore,
+      maxPossible: best.totalMaxScore,
       passRate,
     };
   }, [filtered]);
@@ -222,7 +222,7 @@ export const ResultsDashboardView: React.FC<ResultsDashboardViewProps> = ({
           </div>
         </div>
         <div className="bg-white border border-slate-200 rounded-lg p-4">
-          <div className="text-xs font-medium text-slate-500">أعلى درجة آلية</div>
+          <div className="text-xs font-medium text-slate-500">أعلى مجموع كلي</div>
           <div className="text-2xl font-bold font-mono-num text-slate-900 mt-1">
             {stats.maxScore}{" "}
             <span className="text-sm font-normal text-slate-500">
@@ -414,7 +414,31 @@ export const ResultsDashboardView: React.FC<ResultsDashboardViewProps> = ({
                     {r.autoScore} / {r.autoMaxScore}
                   </td>
                   <td className="py-2.5 px-4 font-mono-num">
-                    {r.essayMaxScore > 0 ? `${r.essayScore} / ${r.essayMaxScore}` : "—"}
+                    {r.essayMaxScore > 0 ? (
+                      <div className="inline-flex items-center gap-1">
+                        <input
+                          type="number"
+                          min={0}
+                          max={r.essayMaxScore}
+                          step={0.5}
+                          value={r.essayScore}
+                          onChange={(e) => {
+                            const val = Math.max(
+                              0,
+                              Math.min(
+                                r.essayMaxScore,
+                                Number(e.target.value) || 0
+                              )
+                            );
+                            onUpdateEssayScore(r.id, val);
+                          }}
+                          className="w-14 rounded border border-slate-300 bg-white px-1.5 py-0.5 text-xs font-mono-num text-center focus:border-emerald-700 focus:outline-none"
+                        />
+                        <span className="text-slate-500">/ {r.essayMaxScore}</span>
+                      </div>
+                    ) : (
+                      "—"
+                    )}
                   </td>
                   <td className="py-2.5 px-4 font-mono-num font-bold text-slate-900">
                     {r.totalScore} / {r.totalMaxScore}
@@ -510,14 +534,22 @@ export const ResultsDashboardView: React.FC<ResultsDashboardViewProps> = ({
                           0,
                           Math.min(
                             inspected.essayMaxScore,
-                            Number(e.target.value)
+                            Number(e.target.value) || 0
                           )
                         );
+                        const nextTotal = inspected.autoScore + val;
+                        const nextPct =
+                          inspected.totalMaxScore > 0
+                            ? Math.round(
+                                (nextTotal / inspected.totalMaxScore) * 1000
+                              ) / 10
+                            : 0;
                         onUpdateEssayScore(inspected.id, val);
                         setInspected({
                           ...inspected,
                           essayScore: val,
-                          totalScore: inspected.autoScore + val,
+                          totalScore: nextTotal,
+                          percentage: nextPct,
                         });
                       }}
                       className="w-20 rounded border border-slate-300 bg-white px-2.5 py-1 text-sm font-mono-num text-center"

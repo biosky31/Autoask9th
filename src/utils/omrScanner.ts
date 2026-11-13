@@ -766,7 +766,9 @@ export function gradeWarpedOMRCanvas(
   const totalScore = autoScore + essayScore;
   const totalMaxScore = autoMaxScore + exam.essayPoints;
   const percentage =
-    autoMaxScore > 0 ? Math.round((autoScore / autoMaxScore) * 1000) / 10 : 0;
+    totalMaxScore > 0
+      ? Math.round((totalScore / totalMaxScore) * 1000) / 10
+      : 0;
 
   return {
     id: `scan_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,

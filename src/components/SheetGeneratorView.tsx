@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import type { ExamModel, StudentAssignment } from "../types/omr";
 import { OMRSheetSvg } from "./OMRSheetSvg";
+import { OMREssayBackSvg } from "./OMREssayBackSvg";
 import { SHEET_HEIGHT, SHEET_WIDTH } from "../utils/omrTemplate";
 
 interface SheetGeneratorViewProps {
@@ -69,6 +70,8 @@ export const SheetGeneratorView: React.FC<SheetGeneratorViewProps> = ({
   );
   const [printCommitteeFilter, setPrintCommitteeFilter] = useState<string>("all");
   const [showAnswerKey, setShowAnswerKey] = useState(false);
+  const [includeEssayBackPage, setIncludeEssayBackPage] = useState(true);
+  const [previewSide, setPreviewSide] = useState<"front" | "back">("front");
   const [downloading, setDownloading] = useState(false);
 
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -897,8 +900,21 @@ export const SheetGeneratorView: React.FC<SheetGeneratorViewProps> = ({
                     </select>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <label className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700 cursor-pointer ml-2">
+                  <div className="flex flex-wrap items-center gap-3">
+                    {activeExam.essayPoints > 0 && (
+                      <label className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={includeEssayBackPage}
+                          onChange={(e) =>
+                            setIncludeEssayBackPage(e.target.checked)
+                          }
+                          className="h-3.5 w-3.5 accent-emerald-700"
+                        />
+                        ظهر الورقة للتعبير
+                      </label>
+                    )}
+                    <label className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700 cursor-pointer ml-1">
                       <input
                         type="checkbox"
                         checked={showAnswerKey}
@@ -985,6 +1001,20 @@ export const SheetGeneratorView: React.FC<SheetGeneratorViewProps> = ({
                 />
               </label>
 
+              {activeExam.essayPoints > 0 && (
+                <label className="flex items-center justify-between gap-3 py-2.5 px-3 rounded-md border border-slate-200 bg-slate-50 cursor-pointer">
+                  <span className="text-sm font-medium text-slate-800">
+                    تضمين ظهر الورقة المسطّر للتعبير (خلف الورقة)
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={includeEssayBackPage}
+                    onChange={(e) => setIncludeEssayBackPage(e.target.checked)}
+                    className="h-4 w-4 accent-emerald-700"
+                  />
+                </label>
+              )}
+
               <div className="rounded-md border border-slate-200 bg-slate-50 p-3 space-y-1">
                 <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
                   <QrCode className="w-4 h-4 text-emerald-700" />
@@ -1031,21 +1061,58 @@ export const SheetGeneratorView: React.FC<SheetGeneratorViewProps> = ({
           <div className="w-full max-w-[680px] flex flex-wrap items-center justify-between gap-2 text-xs text-slate-600 mb-3">
             <span className="font-semibold text-slate-800 truncate">
               معاينة: {previewTarget.studentName || "نموذج فارغ"} ·{" "}
-              {previewTarget.committeeName}
+              {previewTarget.committeeName || "بدون لجنة"}
             </span>
-            <span className="font-mono-num font-bold text-emerald-800">
-              نموذج {previewTarget.exam.modelCode}
-            </span>
+            <div className="flex items-center gap-2">
+              {previewTarget.exam.essayPoints > 0 && (
+                <div className="inline-flex rounded bg-white border border-slate-300 p-0.5 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewSide("front")}
+                    className={`px-2 py-0.5 rounded font-semibold ${
+                      previewSide === "front"
+                        ? "bg-emerald-800 text-white"
+                        : "text-slate-700"
+                    }`}
+                  >
+                    الوجه (التظليل)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewSide("back")}
+                    className={`px-2 py-0.5 rounded font-semibold ${
+                      previewSide === "back"
+                        ? "bg-emerald-800 text-white"
+                        : "text-slate-700"
+                    }`}
+                  >
+                    الظهر (التعبير)
+                  </button>
+                </div>
+              )}
+              <span className="font-mono-num font-bold text-emerald-800">
+                نموذج {previewTarget.exam.modelCode}
+              </span>
+            </div>
           </div>
           <div className="w-full max-w-[680px] bg-white shadow-md border border-slate-300 rounded-sm overflow-hidden">
-            <OMRSheetSvg
-              svgRef={svgRef}
-              exam={previewTarget.exam}
-              studentName={previewTarget.studentName}
-              committeeName={previewTarget.committeeName}
-              showAnswerKey={showAnswerKey}
-              className="w-full h-auto block"
-            />
+            {previewSide === "back" && previewTarget.exam.essayPoints > 0 ? (
+              <OMREssayBackSvg
+                exam={previewTarget.exam}
+                studentName={previewTarget.studentName}
+                committeeName={previewTarget.committeeName}
+                className="w-full h-auto block"
+              />
+            ) : (
+              <OMRSheetSvg
+                svgRef={svgRef}
+                exam={previewTarget.exam}
+                studentName={previewTarget.studentName}
+                committeeName={previewTarget.committeeName}
+                showAnswerKey={showAnswerKey}
+                className="w-full h-auto block"
+              />
+            )}
           </div>
         </div>
       </div>
@@ -1053,15 +1120,27 @@ export const SheetGeneratorView: React.FC<SheetGeneratorViewProps> = ({
       {/* Print-only A4 Sheets Container */}
       <div className="hidden print:block print:m-0 print:p-0">
         {sheetsToPrint.map((item) => (
-          <div key={item.id} className="print-only-sheet">
-            <OMRSheetSvg
-              exam={item.exam}
-              studentName={item.studentName}
-              committeeName={item.committeeName}
-              showAnswerKey={showAnswerKey}
-              className="w-full h-full block"
-            />
-          </div>
+          <React.Fragment key={item.id}>
+            <div className="print-only-sheet">
+              <OMRSheetSvg
+                exam={item.exam}
+                studentName={item.studentName}
+                committeeName={item.committeeName}
+                showAnswerKey={showAnswerKey}
+                className="w-full h-full block"
+              />
+            </div>
+            {includeEssayBackPage && item.exam.essayPoints > 0 && (
+              <div className="print-only-sheet">
+                <OMREssayBackSvg
+                  exam={item.exam}
+                  studentName={item.studentName}
+                  committeeName={item.committeeName}
+                  className="w-full h-full block"
+                />
+              </div>
+            )}
+          </React.Fragment>
         ))}
       </div>
     </>

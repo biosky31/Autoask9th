@@ -113,6 +113,10 @@ export const OMRSheetSvg: React.FC<OMRSheetSvgProps> = ({
   const committeeFontSize =
     displayCommittee.length > 36 ? 13 : displayCommittee.length > 26 ? 14 : 15.5;
   const modelFontSize = exam.modelCode.length > 7 ? 15.5 : 20;
+  const autoMax = exam.tfCount * exam.tfPoints + exam.mcqCount * exam.mcqPoints;
+  const totalMax = autoMax + exam.essayPoints;
+  const totalQuestions =
+    exam.tfCount + exam.mcqCount + (exam.essayPoints > 0 ? 1 : 0);
 
   return (
     <svg
@@ -377,11 +381,11 @@ export const OMRSheetSvg: React.FC<OMRSheetSvgProps> = ({
       <rect x={198} y={172} width={160} height={60} fill="#f8fafc" stroke="#94a3b8" strokeWidth={1} rx={2} />
       <text
         x={348}
-        y={192}
+        y={190}
         textAnchor="start"
         direction="rtl"
         fill="#475569"
-        fontSize="11.5"
+        fontSize="11"
         fontWeight="600"
         fontFamily="IBM Plex Sans Arabic, sans-serif"
       >
@@ -389,17 +393,32 @@ export const OMRSheetSvg: React.FC<OMRSheetSvgProps> = ({
       </text>
       <text
         x={278}
-        y={217}
+        y={211}
         textAnchor="middle"
         direction="rtl"
         clipPath={`url(#omr-clip-totals-${uid})`}
         fill="#0f172a"
-        fontSize="13"
+        fontSize="13.5"
         fontWeight="700"
         fontFamily="IBM Plex Sans Arabic, sans-serif"
       >
-        {exam.tfCount + exam.mcqCount} فقرة ({exam.tfCount * exam.tfPoints + exam.mcqCount * exam.mcqPoints} درجة)
+        {totalQuestions} سؤال · {totalMax} درجة
       </text>
+      {exam.essayPoints > 0 && (
+        <text
+          x={278}
+          y={226}
+          textAnchor="middle"
+          direction="rtl"
+          clipPath={`url(#omr-clip-totals-${uid})`}
+          fill="#475569"
+          fontSize="10"
+          fontWeight="600"
+          fontFamily="IBM Plex Sans Arabic, sans-serif"
+        >
+          ({autoMax} آلي + {exam.essayPoints} تعبير خلف الورقة)
+        </text>
+      )}
 
       {/* 4 CORNER FIDUCIAL MARKERS (Clear quiet zone around each) */}
       {Object.entries(FIDUCIAL_CENTERS).map(([key, pt]) => (
@@ -584,12 +603,13 @@ export const OMRSheetSvg: React.FC<OMRSheetSvgProps> = ({
             x={574}
             y={721}
             textAnchor="middle"
+            direction="rtl"
             fill="#0f172a"
-            fontSize="12"
+            fontSize="11"
             fontWeight="700"
             fontFamily="Cairo, sans-serif"
           >
-            خاص بدرجة التعبير (للمصحح فقط - سؤال {maxTf + maxMcq + 1})
+            درجة التعبير - خلف الورقة (سؤال {maxTf + maxMcq + 1} من {exam.essayPoints})
           </text>
           <text
             x={692}

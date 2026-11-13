@@ -485,10 +485,14 @@ export const ExamsDashboardView: React.FC<ExamsDashboardViewProps> = ({
               توليد مفتاح عشوائي
             </button>
             <div className="text-sm font-mono-num font-bold text-slate-800">
-              الدرجة الآلية:{" "}
+              الإجمالي:{" "}
               {activeExam.tfCount * activeExam.tfPoints +
-                activeExam.mcqCount * activeExam.mcqPoints}{" "}
-              درجة
+                activeExam.mcqCount * activeExam.mcqPoints +
+                activeExam.essayPoints}{" "}
+              درجة{" "}
+              <span className="text-xs font-normal text-slate-500">
+                ({activeExam.tfCount * activeExam.tfPoints + activeExam.mcqCount * activeExam.mcqPoints} آلي + {activeExam.essayPoints} تعبير)
+              </span>
             </div>
           </div>
         </div>

@@ -411,9 +411,12 @@ export const CameraScannerView: React.FC<CameraScannerViewProps> = ({
         };
       });
 
+      const existingEssay = scannedResult?.essayScore ?? 0;
+      const totalMaxScore = autoMaxScore + activeExam.essayPoints;
+      const totalScore = autoScore + existingEssay;
       const percentage =
-        autoMaxScore > 0
-          ? Math.round((autoScore / autoMaxScore) * 1000) / 10
+        totalMaxScore > 0
+          ? Math.round((totalScore / totalMaxScore) * 1000) / 10
           : 0;
 
       setScannedResult((prev) => ({
@@ -431,8 +434,8 @@ export const CameraScannerView: React.FC<CameraScannerViewProps> = ({
         autoMaxScore,
         essayScore: prev?.essayScore ?? 0,
         essayMaxScore: activeExam.essayPoints,
-        totalScore: autoScore + (prev?.essayScore ?? 0),
-        totalMaxScore: autoMaxScore + activeExam.essayPoints,
+        totalScore,
+        totalMaxScore,
         percentage,
         correctCount,
         wrongCount,
@@ -726,16 +729,20 @@ export const CameraScannerView: React.FC<CameraScannerViewProps> = ({
                 </div>
                 <div className="text-left">
                   <div className="text-2xl font-bold font-mono-num text-emerald-800">
-                    {scannedResult.autoScore} / {scannedResult.autoMaxScore}
+                    {scannedResult.totalScore} / {scannedResult.totalMaxScore}
                   </div>
                   <div className="text-xs font-mono-num text-slate-600">
-                    النسبة: {scannedResult.percentage}%
+                    الآلي: {scannedResult.autoScore}/{scannedResult.autoMaxScore}
+                    {scannedResult.essayMaxScore > 0
+                      ? ` · التعبير: ${scannedResult.essayScore}/${scannedResult.essayMaxScore}`
+                      : ""}{" "}
+                    · {scannedResult.percentage}%
                   </div>
                 </div>
               </div>
 
-              {/* Confirm Student & Committee (NO Seat Number) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {/* Confirm Student, Committee & Manual Essay Score (NO Seat Number) */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
                     اسم الطالب
@@ -760,6 +767,44 @@ export const CameraScannerView: React.FC<CameraScannerViewProps> = ({
                     className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-emerald-700 focus:outline-none"
                   />
                 </div>
+                {scannedResult.essayMaxScore > 0 && (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      درجة التعبير (خلف الورقة / {scannedResult.essayMaxScore})
+                    </label>
+                    <input
+                      type="number"
+                      min={0}
+                      max={scannedResult.essayMaxScore}
+                      step={0.5}
+                      value={scannedResult.essayScore}
+                      onChange={(e) => {
+                        const val = Math.max(
+                          0,
+                          Math.min(
+                            scannedResult.essayMaxScore,
+                            Number(e.target.value) || 0
+                          )
+                        );
+                        const nextTotal = scannedResult.autoScore + val;
+                        const nextPct =
+                          scannedResult.totalMaxScore > 0
+                            ? Math.round(
+                                (nextTotal / scannedResult.totalMaxScore) * 1000
+                              ) / 10
+                            : 0;
+                        setScannedResult({
+                          ...scannedResult,
+                          essayScore: val,
+                          totalScore: nextTotal,
+                          percentage: nextPct,
+                        });
+                        setSavedNotice(false);
+                      }}
+                      className="w-full rounded-md border border-emerald-600 bg-emerald-50/40 px-3 py-2 text-sm font-mono-num font-bold text-slate-900 focus:border-emerald-700 focus:outline-none"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Summary Strip */}

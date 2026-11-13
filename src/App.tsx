@@ -195,15 +195,20 @@ export default function App() {
 
   const handleUpdateEssayScore = (id: string, essayScore: number) => {
     setResults((prev) =>
-      prev.map((r) =>
-        r.id === id
-          ? {
-              ...r,
-              essayScore,
-              totalScore: r.autoScore + essayScore,
-            }
-          : r
-      )
+      prev.map((r) => {
+        if (r.id !== id) return r;
+        const totalScore = r.autoScore + essayScore;
+        const percentage =
+          r.totalMaxScore > 0
+            ? Math.round((totalScore / r.totalMaxScore) * 1000) / 10
+            : 0;
+        return {
+          ...r,
+          essayScore,
+          totalScore,
+          percentage,
+        };
+      })
     );
   };
 

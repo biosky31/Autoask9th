@@ -1,0 +1,6 @@
+{
+  "name": "نظام أتمتة مدارس إشراق اليمن | أ. إبراهيم",
+  "description": "منصة توليد أوراق التظليل (OMR) الذكية بالباركود، والمسح عبر الكاميرا، ومطابقة الاختبارات وإدارة اللجان لمدارس إشراق اليمن - الأستاذ إبراهيم.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
